@@ -1,0 +1,100 @@
+---
+title: "Country Information Dashboard"
+
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(plotly)
+
+```
+
+
+```{r, global, echo = F}
+countryInfo = readRDS("countryInfo.rds")
+```
+
+
+
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Check country risk
+
+```{r}
+selectInput("country", "Choose a country:", 
+            choices = rev(unique(countryInfo$country)), selected = "China")
+
+renderPlotly({
+  mydata = countryInfo %>% filter(country == input$country) %>% gather(key="Risk", value = "value", 3:6) 
+
+  p1 = ggplot(mydata, aes(x = Risk, y = value)) +
+    geom_bar(stat="identity", fill="seagreen")  +
+    coord_flip()
+  ggplotly(p1)
+})
+
+```
+
+### Countries with chosen conflict risk
+
+```{r, echo = F}
+
+
+sliderInput("conflict", "Choose projected conflict risk levels:", min = min(countryInfo$projected_conflict_risk),
+            max = max(countryInfo$projected_conflict_risk), value = c(5, 8))
+
+renderPlotly({
+  mydata = countryInfo %>% filter(projected_conflict_risk >= input$conflict[1] & projected_conflict_risk <= input$conflict[2])
+  
+  p2 = ggplot(mydata, aes(x = country))+
+    geom_bar(aes(y = projected_conflict_risk), stat = 'identity', fill = "steelblue")+
+    coord_flip()
+  ggplotly(p2)
+})
+
+
+```
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Countries with chosen inform risk
+
+```{r, echo = F}
+sliderInput("inform", "Choose inform risk levels:", min = min(countryInfo$inform_risk),
+            max = max(countryInfo$inform_risk), value = c(5, 8))
+renderPlotly({
+  mydata = countryInfo %>% filter(inform_risk >= input$inform[1] & projected_conflict_risk <= input$inform[2])
+  
+  ggplotly(ggplot(mydata, aes(x = country))+
+    geom_bar(aes(y = inform_risk), stat = 'identity', fill = "royalblue")+
+    coord_flip())
+})
+
+```
+
+### Countries with chosen health risk
+
+```{r, echo = F}
+
+sliderInput("health", "Choose health condition:", min = min(countryInfo$health_conditions),
+            max = max(countryInfo$health_conditions), value = c(5, 8))
+
+renderPlotly({
+  mydata = countryInfo %>% filter(health_conditions >= input$health[1] & health_conditions <= input$health[2])
+  
+  ggplotly(ggplot(mydata, aes(x = country))+
+    geom_bar(aes(y = health_conditions), stat = 'identity', fill = "coral")+
+    coord_flip())
+})
+
+```
+

@@ -1,0 +1,115 @@
+---
+title: "Piezo DB"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Load libraries
+
+```{r}
+library(tidyverse)
+```
+## Read DB file
+
+```{r}
+piezo = read.csv("piezo.csv")
+piezo = as_tibble(piezo)
+names(piezo)
+#cor(piezo[, 10:34])
+```
+
+## Exploratory data analysis
+
+```{r}
+ggplot(data = piezo) +
+  geom_boxplot(aes(x = factor(nsites), y = eij), color = 'blue') +
+  coord_cartesian(ylim=c(0, 15)) +
+  ggtitle("Boxplot of Eij based on nsites")
+
+ggplot(data = piezo) +
+  geom_point(aes(x = volume, y = eij), alpha = 0.2) +
+  scale_y_log10() +
+  ggtitle("Eij vs volume")
+
+ggplot(data = piezo %>% gather(a:c, key = "abc", value = "length"), 
+       aes(x = eij, y = length, color = abc)) +
+  geom_line(alpha = 0.6, size = 1) +
+  scale_x_continuous(limits = c(0, 5)) +
+  ggtitle("Eij vs cell length a, b, c")
+
+ggplot(data = piezo %>% gather(alpha:gamma, key = "Angle", value = "angle"), 
+       aes(x = eij, y = angle, color = Angle))  +
+  geom_line(alpha = 0.6, size = 1) +
+  scale_x_continuous(limits = c(0, 5)) +
+  ggtitle("Eij vs cell angle alpha, beta and gamma")
+  
+```
+### Extract component in formula
+
+Investigate the effect of Ti presence on  Eij
+
+```{r}
+piezo2 = piezo %>% mutate(Ti = grepl('Ti', formula))
+
+ggplot(piezo2, aes(x = Ti, y = eij)) +
+  geom_boxplot()
+
+```
+### Try random forest on subset of piezo data
+
+The prediction works a little better in the range of [0.5, 3] for eij.
+
+```{r}
+library(ranger)
+# subset the data set to find my workable model
+piezo3 = select(piezo2, eij, a:gamma, Ti) %>% filter(eij >=0.5 & eij <= 3)
+
+K = as.integer(0.8*nrow(piezo3))
+piezo3.train = piezo3[1:K, ]
+piezo3.test = piezo3[(K+1): nrow(piezo3), ]
+
+# ------ Random Forest ---------------
+
+piezo3.ranger = ranger(eij ~ ., data = piezo3.train, importance = "impurity")
+
+piezo3.pred = predict(piezo3.ranger, select(piezo3.test, -eij))
+
+result = bind_cols(piezo3.test$eij, piezo3.pred$predictions, piezo3.test$Ti)
+names(result) = c("Actual", "Predicted", "Ti")
+
+ggplot(result, aes(Actual, Predicted)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  ggtitle("Predicted eij vs actual eij using Random Forest")
+
+importance(piezo3.ranger)
+
+# -------- General Linear Model ---------------
+
+piezo3.lm = glm(eij ~ ., data = piezo3.train)
+
+piezo3.lm.pred = predict(piezo3.lm, select(piezo3.test, -eij))
+
+result2 = bind_cols(piezo3.test$eij, piezo3.lm.pred)
+names(result2) = c("Actual", "Predicted")
+
+ggplot(result2, aes(Actual, Predicted)) +
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method = "lm") +
+  ggtitle("Predicted eij vs actual eij using General Linear Model")
+
+```
+### Check piezo crystal of interest
+
+```{r}
+
+mycrystal = c("TiPbO3", "BaTiO3", "KNbO3", "BaTiO3")
+
+mypiezo = piezo[piezo$formula %in% mycrystal, ]
+```
+

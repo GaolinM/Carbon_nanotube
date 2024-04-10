@@ -1,0 +1,111 @@
+---
+title: "Analysis of Tensor Test Data"
+author: "Gaolin"
+date: "7/15/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Read Tensor test data generated with LAMMPS
+
+```{r}
+library(tidyverse)
+
+tensor = read.csv("tensorTest.csv")
+tensor = as_tibble(tensor)
+
+head(tensor)
+dim(tensor)
+names(tensor)
+```
+
+## Exploratory data analysis
+
+Examine the distribution of potential energy and kinetic energy, Temp and other variables
+
+```{r}
+
+# See the change of temperature over time
+ggplot(tensor, aes(Step, Temp)) +
+  geom_line() + ggtitle("Temperature change over time")
+
+ggplot(tensor %>% gather(c(v_strain, v_sigmaxx, v_sigmazz), key="v", value = 'value'), aes(x = Step, y = value, color = v)) +
+  geom_line(alpha = 0.5)
+
+ggplot(tensor, aes(Step, v_sigmayy)) + geom_line()
+
+ggplot(data = tensor) +
+  geom_histogram(aes(x = PotEng ))
+
+ggplot(data = tensor, aes(x = Step)) +
+  geom_line(aes(y = PotEng), color = 'steelblue') +
+  ggtitle("Potential energy at each step")
+
+ggplot(data = tensor, aes(x = Step)) +
+  geom_line(aes(y = KinEng), color = 'blue') +
+  scale_y_continuous(limits=c(30, 50)) +
+  ggtitle("Kinetic energy at each step")
+
+ggplot(tensor, aes(Step, v_cntdiameter)) +
+  geom_point(alpha = 0.2, color = 'steelblue')
+
+```
+
+## Investigate some pair-wise relationship
+
+### poential energy vs kinetic energy
+
+```{r}
+ggplot(tensor, aes(x = PotEng, y = KinEng)) +
+  geom_point(alpha = 0.6, color = 'steelblue')
+```
+### Temperature vs Potential Energy and Kinetic Energy
+
+```{r}
+ggplot(tensor,aes(x = Temp, y = PotEng)) +
+  geom_point(alpha = 0.7)
+
+ggplot(tensor, aes(x = Temp, y = KinEng)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+
+ggplot(tensor, aes(x = Temp, y = v_cntdiameter)) +
+  geom_point()
+
+ggplot(tensor %>% gather(Lx:Lz, key = "xyz", value = "value"), aes(x = Temp, y = value, color = xyz)) +
+  geom_point(alpha = 0.3)
+```
+## Correlation plot
+
+```{r}
+library(corrplot)
+corrplot(cor(tensor[, 2:14]), method="circle", diag = F)
+```
+### Explore Potential Energy vs v_strain
+
+```{r}
+ggplot(tensor, aes(x = v_strain, y = PotEng)) +
+  geom_point(color = 'steelblue') 
+
+ggplot(tensor, aes(x = Ly, y = Lx)) +
+  geom_point(color = 'cyan') 
+
+ggplot(tensor, aes(x = v_sigmayy, y = PotEng)) +
+  geom_point(color = 'magenta', alpha = 0.5) 
+
+
+ggplot(tensor, aes(x = v_sigmayy, y = v_cntdiameter)) +
+  geom_point(color = 'darkgrey', alpha = 0.7) 
+```
+
+### Explore Sigmayy vs Strain
+
+```{r}
+ggplot(tensor, aes(x = v_strain, y = v_sigmayy)) + 
+  geom_line()
+
+```
+

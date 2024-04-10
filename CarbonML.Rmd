@@ -1,0 +1,198 @@
+---
+title: "Atomic coordinate prediction of carbon nanotubes"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readr)
+```
+
+## Import and pre-process the carbon nanotube data
+
+Tidy up the data. 
+
+```{r}
+carbonNT = read_delim("benchmark/carbon_nanotubes.csv", ";")
+head(carbonNT)
+names(carbonNT)
+
+# Separate u, v, w into one value
+CNT = carbonNT %>% 
+  separate(`Initial atomic coordinate u`, c(NA, 'u')) %>%
+  separate(`Initial atomic coordinate v`, c(NA, 'v')) %>%
+  separate(`Initial atomic coordinate w`, c(NA, 'w')) %>%
+  separate(`Calculated atomic coordinates u'`, c(NA, 'uu')) %>%
+  separate(`Calculated atomic coordinates v'`, c(NA, 'vv')) %>%
+  separate(`Calculated atomic coordinates w'`, c(NA, 'ww')) 
+
+CNT$u = as.numeric(CNT$u)
+CNT$v = as.numeric(CNT$v)
+CNT$w = as.numeric(CNT$w)
+CNT$uu = as.numeric(CNT$uu)
+CNT$vv = as.numeric(CNT$vv)
+CNT$ww = as.numeric(CNT$ww)
+
+# rename the first two columns to n and m for easy manipulation
+CNT = rename(CNT, m = 'Chiral indice m', n = 'Chiral indice n' )
+
+head(CNT)
+
+```
+## Explore the CNT data set
+
+*Explore the distribution between m and n (chiral indice m and n)*
+
+```{r}
+ggplot(data = CNT) +
+  geom_count(mapping = aes(factor(m), factor(n)), color = 'steelblue') +
+  xlab('Chiral indice m') +
+  ylab('Chiral indice n')
+
+```
+Check the relationship b/w chiral indice m, n and u, v, w
+
+```{r}
+ggplot(CNT) +
+  geom_boxplot(mapping = aes(x = factor(m), y = u, fill = factor(n))) +
+  facet_wrap(~n) +
+  xlab('Chiral indice m')
+ggplot(CNT) +
+  geom_boxplot(mapping = aes(x = factor(m), y = v, fill = factor(n))) +
+  facet_wrap(~ n) +
+  xlab('Chiral indice m')
+```
+ Explore the relationship between initial coordinates u, v, and w
+ 
+```{r}
+CNT %>% 
+  ggplot(aes(x = u, y = v)) +
+  geom_point(alpha = 0.1, color = 'steelblue') +
+  facet_wrap(~ m)
+
+ggplot(CNT, aes(x = u, y = w)) +
+  geom_point(alpha = 0.1, color = 'blue') +
+  facet_wrap(~n + m)
+
+ggplot(CNT, aes(x = v, y = w)) +
+  geom_point(alpha = 0.1, color = 'red')
+```
+ 
+ Explore the relationship between the calculated coordinates uu, vv and ww
+```{r}
+ggplot(CNT, aes(x = uu, y = vv)) +
+  geom_point(alpha = 0.1, color = 'steelblue') 
+
+ggplot(CNT, aes(x = uu, y = ww)) +
+  geom_point(alpha = 0.1, color = 'blue')
+
+ggplot(CNT, aes(x = vv, y = ww)) +
+  geom_point(alpha = 0.1, color = 'red')
+
+```
+ 
+ Clean up data CNT, remove NA from ww
+ 
+```{r}
+CNT = na.omit(CNT)
+dim(CNT)
+```
+ 
+ ## Predict atomic coordinates using Keras
+
+Load keras library
+```{r}
+library(keras)
+library(caret)
+```
+
+### Split the data into training and testing 
+
+We use first 80% for training, and the last 20% for testing. We then check the distribution of the training and testing data sets to make sure points are uniformly distributed in both training and testing data sets.
+
+```{r}
+N = nrow(CNT)
+K = as.integer(0.8*N)
+CNT.trainx = CNT[1:K, 1:5]
+CNT.trainy = CNT[1:K, 6:8]
+CNT.testx = CNT[(K+1):N, 1:5]
+CNT.testy = CNT[(K+1):N, 6:8]
+
+
+
+ggplot(CNT.trainx, aes(x = u, y = v)) +
+  geom_point(alpha = 0.2, color = 'steelblue') +
+  ggtitle('Distribution of u and v of the training data set')
+
+ggplot(CNT.testx, aes(x = u, y = v)) +
+  geom_point(alpha = 0.2, color = 'blue') +
+  ggtitle('Distribution of u and v of the testing data set')
+```
+
+### Set up keras model
+
+```{r}
+mymodel <- keras_model_sequential() %>% 
+  layer_dense(units = 10, activation="relu", input_shape=3) %>% 
+  layer_dense(units = 10, activation = "relu") %>% 
+  layer_dense(3, activation = "linear")
+```
+
+### Compile and summarize the model
+
+```{r}
+mymodel %>% compile(
+  loss = "mse",
+  optimizer = "adam")
+
+summary(model)
+```
+
+### Fit and evaluate the model
+
+```{r}
+# Convert to matrix format for CNT.trainx and CNT.trainy
+CNT.trainx = scale(as.matrix(CNT.trainx))
+CNT.trainy = scale(as.matrix(CNT.trainy))
+CNT.testx = scale(as.matrix(CNT.testx))
+CNT.testy = scale(as.matrix(CNT.testy))
+
+
+print_dot_callback <- callback_lambda(
+  on_epoch_end = function(epoch, logs) {
+    if (epoch %% 80 == 0) cat("\n")
+    cat(".")  
+  }
+) 
+
+myhistory = mymodel %>% fit(CNT.trainx, CNT.trainy, 
+                epochs = 200, 
+                validation_split = 0.1,
+                verbose = 0,
+                callbacks = list(print_dot_callback))
+scores = mymodel %>% evaluate(CNT.trainx, CNT.trainy, verbose = 0)
+print(scores)
+plot(myhistory)
+
+ypred = mymodel %>% predict(CNT.testx)
+
+result = cbind(CNT.testx[, 1:2], CNT.testy, ypred)
+result = tibble(as.data.frame(result))
+names(result) = c("n", "m", "u", "v", "w", 'pred_u', 'pred_v', "pred_w")
+
+# Compute the root mean square error
+cat("u RMSE:", RMSE(result$u, result$pred_u))
+cat("v RMSE:", RMSE(result$v, result$pred_v))
+cat("w RMSE:", RMSE(result$w, result$pred_w))
+
+ggplot(result) +
+  geom_point(aes(x = 1:nrow(result), y = pred_u - u), color = 'purple', alpha = 0.3) +
+  facet_wrap(~ m + n, ncol = 4) +
+  xlab('ID') +
+  ylab("Difference") +
+  ggtitle("Difference b/w predicted and actual coordinates")
+  
+
+
+```
+

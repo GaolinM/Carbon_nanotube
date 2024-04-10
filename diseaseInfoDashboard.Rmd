@@ -1,0 +1,60 @@
+---
+title: "Disease Information Dashboard"
+
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+
+```
+
+
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Choose parameters
+
+```{r, echo = F}
+diseaseInfo = readRDS("diseaseInfo.rds")
+
+attribute = names(diseaseInfo)[-(1:2)]
+
+diseaseInfo = diseaseInfo %>% gather(key = "property", value = "value", 3:31)
+
+selectInput("property", "Choose a property:",
+      choices = attribute, selected = "speeed_of_spread")
+
+ggplot(diseaseInfo, aes(x = property, y = disease, fill = value)) +
+  geom_tile() +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(), 
+        axis.title.y = element_blank()) + 
+  theme(axis.text.x = element_text(angle=45, vjust=1, hjust=1)) +
+  theme(legend.position="top")
+```
+
+
+
+Column {data-width=400}
+-----------------------------------------------------------------------
+
+### Bar plot
+
+```{r, echo = F}
+renderPlot({
+  mydata = diseaseInfo %>% filter(property == input$property)
+  ggplot(mydata, aes(x=disease, y=value)) + geom_bar(stat = "identity")+
+    scale_x_discrete() +
+    coord_flip()
+})
+
+```
+

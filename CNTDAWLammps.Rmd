@@ -1,0 +1,459 @@
+---
+title: "North Carolina Central University Carbon Nanotube Database"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r, include=FALSE}
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+library(tidyverse)
+library(plotly)
+library(DT)
+library(ggcorrplot)
+library(zoo)
+```
+
+
+
+Sidebar {.sidebar}
+-----------------------------------------------------------------------
+
+Select a lammps log file
+
+```{r}
+fileInput("file1", "Choose lammps log file in csv format",
+                multiple = F,
+                accept = c("text/csv",
+                         "text/comma-separated-values,text/plain",
+                         ".csv"))
+
+dataset <- eventReactive(input$file1,{
+      x <- read.csv(input$file1$datapath)
+      x <- x %>% mutate(t = Step * 0.0005)
+    })
+
+```
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### MD Temperature
+
+#### Select an interval
+```{r}
+
+sliderInput("MDTime", label = "Choose a MD time interval:",
+           min = 0, max = 500, step = 0.0005, value = c(0, 500))  
+
+```
+
+#### Temperature vs MD Time(ps)
+```{r}
+
+renderPlotly({
+
+  df = dataset()%>% filter(t >= input$MDTime[1] & t <= input$MDTime[2])
+  ggplot(df, aes(t, Temp)) +
+    geom_point(color = 'darkred', size = 0.5) +
+    labs(x = "MD Time(ps)", y = "Temperature (K)", title = "Temperature changes during MD") 
+
+}) 
+
+```
+
+
+### strain & stress
+
+#### Strain (linear stimulus during MD)
+
+```{r}
+
+renderPlotly({
+
+  df = dataset() 
+  ggplot(df, aes(t, v_strain)) +
+    geom_point(color = 'darkred', size = 0.5) +
+    labs(x = "MD Time(ps)", y = "strain (unitless)", title = "Strain during MD") 
+
+}) 
+
+```
+
+#### Stresses response during MD
+
+##### Sigmaxx
+
+```{r}
+renderPlotly({
+
+  df = dataset() 
+  ggplot(df, aes(t, v_sigmaxx)) +
+    geom_point(color = 'coral', size = 0.5) +
+    labs(x = "MD Time(ps)", y = "Sigmaxx (GPa)", title = "Sigmaxx during MD") 
+
+})
+```
+
+##### Sigmayy
+
+```{r}
+renderPlotly({
+
+  df = dataset() 
+  ggplot(df, aes(t, v_sigmayy)) +
+    geom_point(color = 'blue',size = 0.5) +
+    labs(x = "MD Time(ps)", y = "Sigmayy (GPa)", title = "Sigmayy during MD") 
+
+})
+```
+
+##### Sigmazz
+
+```{r}
+renderPlotly({
+
+  df = dataset() 
+  ggplot(df, aes(t, v_sigmazz)) +
+    geom_point(color = 'seagreen', size = 0.5) +
+    labs(x = "MD Time(ps)", y = "Sigmazz (GPa)", title = "Sigmazz during MD") 
+
+})
+```
+
+### Potential and Kinetic Energies
+
+#### Potential energy
+
+```{r}
+renderPlotly({
+
+  df = dataset()
+  ggplot(df, aes(t, PotEng)) +
+    geom_point(color = 'darkred', size = 0.5) +
+    labs(x = "MD Time(ps)", y = "Potential Energy", title = "Potential Energy during MD") 
+
+})
+```
+
+
+#### Kinetic energy
+
+```{r}
+renderPlotly({
+
+  df = dataset()
+  ggplot(df, aes(t, KinEng)) +
+    geom_point(color = 'blue', size = 0.5) +
+    labs(x = "MD Time(ps)", y = "Kinetic Energy", title = "Kinetic Energy during MD") 
+
+})
+```
+
+
+#### Potential + kinetic energy
+
+```{r}
+renderPlotly({
+
+  df = dataset() 
+  ggplot(df, aes(t, PotEng + KinEng)) +
+    geom_point(color = 'seagreen', size = 0.5) +
+    labs(x = "MD Time(ps)", y = "Potential + Kinetic Energy", title = "Total Energy during MD") 
+
+})
+```
+
+
+
+### Size and volume
+
+#### CNT Dimensions (Lx, Ly and Lz)
+```{r}
+renderPlotly({
+
+  df = dataset()  %>% select(t, Lx, Ly, Lz) %>% 
+    gather(dimension, value, Lx:Lz)
+  ggplot(df, aes(t, value, color = dimension)) +
+    geom_line() + 
+    labs(x = "MD Time(ps)", y = "Dimension (A)", title = "CNT Size variation during MD") 
+
+})
+```
+
+#### CNT volume and corrected volume
+
+```{r}
+renderPlotly({
+
+  df = dataset() %>% select(t, Volume, v_CorVol) %>% 
+    gather(volume, value, Volume:v_CorVol)
+  ggplot(df, aes(t, value, color = volume)) +
+    geom_line() + 
+    labs(x = "MD Time(ps)", y = "Volume", title = "CNT Volume and Corrected Volume during MD") 
+
+})
+```
+
+#### CNT averaged diameter
+
+```{r}
+renderPlotly({
+
+  df = dataset() %>% select(t, v_cntdiameter) 
+  
+  ggplot(df, aes(t, v_cntdiameter)) +
+    geom_line(color = 'blue') + 
+    labs(x = "MD Time(ps)", y = "CNT Diameter (A)", title = "CNT averaged diameter during MD") 
+
+})
+```
+
+### Stress-strain curves
+
+```{r}
+renderPlotly({
+
+  df = dataset() %>% select(v_strain, v_sigmaxx, v_sigmayy, v_sigmazz) %>% 
+    gather(dimension, value, v_sigmaxx:v_sigmazz)
+  
+    ggplot(df, aes(v_strain, value)) +
+    geom_line(color = 'blue') + 
+    facet_wrap(~dimension) +
+    labs(title = "Stress-strain curves along different dimensions")
+
+})
+```
+
+### Potential energy features - 1
+
+#### Potential Energy during Initial Pulling and Elastic Regime
+
+```{r}
+renderPlotly({
+
+  df = dataset() %>% select(t, PotEng) %>% 
+    filter(t>= 0 & t <= 200)
+  
+  ggplot(df, aes(t, PotEng)) +
+    geom_line(color = 'blue') + 
+    labs(x = "MD time (fs)", y = "Potential Energy", title = "Potential energy during initial pulling and elastic regime")
+})
+```
+
+#### Potential Energy during Details of Elastic Regime
+
+```{r}
+renderPlotly({
+
+  df = dataset() %>% select(t, PotEng) %>% 
+    filter(t>= 150 & t <= 200)
+  
+  ggplot(df, aes(t, PotEng)) +
+    geom_line(color = 'blue') + 
+    labs(x = "MD time (fs)", y = "Potential Energy", title = "Potential energy during details of elastic regime")
+})
+```
+
+#### Potential Energy during Details of the Plastic Regime (just before the fracture)
+
+```{r}
+renderPlotly({
+
+  df = dataset()%>% select(t, PotEng) %>% 
+    filter(t>= 390 & t <= 404)
+  
+  ggplot(df, aes(t, PotEng)) +
+    geom_line(color = 'blue') + 
+    labs(x = "MD time (fs)", y = "Potential Energy", title = "Potential energy during details of elastic regime")
+})
+```
+
+#### Potential energy during start of instabilities
+
+```{r}
+renderPlotly({
+
+  df = dataset() %>% select(t, PotEng) %>% 
+    filter(t>= 400 & t <= 404)
+  
+  ggplot(df, aes(t, PotEng)) +
+    geom_line(color = 'blue') + 
+    labs(x = "MD time (fs)", y = "Potential Energy", title = "Potential energy during start of instabilities")
+})
+```
+
+
+### Potential energy features - 2
+
+#### Select an time interval
+
+```{r}
+sliderInput("time2", label = "Choose a MD time interval:",
+           min = 0, max = 500, step = 0.0005, value = c(0, 500))  
+```
+
+#### Visualize second order variations of potential energy for different stages of time interval
+
+
+```{r}
+# compute rolling of the 30 lagged time points
+renderPlotly({
+
+  df = dataset() %>% select(t, PotEng, KinEng) %>% 
+    mutate(PotBase = rollmean(PotEng, k = 31, fill=NA), total = PotEng + KinEng) %>% 
+    mutate(PotVar = PotEng - PotBase) %>% filter(t >= input$time2[1] & t <= input$time2[2])
+  
+  ggplot(df, aes(t, PotVar)) +
+    geom_line(color = 'seagreen') +
+    geom_hline(yintercept = 2.7, color = 'red') +
+    geom_hline(yintercept = -2.7, color = 'red') +
+    labs(x = "MD time (ps)", y = "Potential Energy Variations (eV)", title = "Second Order Variations of 
+Potential Energy (Potential - Baseline)")
+})
+```
+
+### Plastic events
+
+#### Select an time interval
+
+```{r}
+sliderInput("time2", label = "Choose a MD time interval:",
+           min = 0, max = 500, step = 0.0005, value = c(0, 500))  
+```
+
+
+```{r}
+renderDataTable({
+  
+    df = dataset() %>% select(t, PotEng, KinEng) %>% 
+    mutate(PotBase = rollmean(PotEng, k = 31, fill=NA), total = PotEng + KinEng) %>% 
+    mutate(PotVar = PotEng - PotBase) %>% filter(t >= input$time2[1] & t <= input$time2[2]) %>% 
+      filter(PotVar > 2.7 | PotVar < -2.7)
+  
+})
+```
+
+
+### Extracted data
+
+#### Strain-stress curve
+
+```{r}
+renderPlotly({
+
+  df = dataset() %>% select(v_strain, v_sigmayy) 
+  
+  ggplot(df, aes(v_strain, v_sigmayy)) +
+    geom_line(color = 'blue') + 
+    geom_vline(aes(xintercept=0.077), color="red", linetype="dashed", size=1)+
+    geom_vline(aes(xintercept=0.1579), color="red", linetype="dashed", size=1)+
+    geom_vline(aes(xintercept=0.255), color="red", linetype="dashed", size=1)+
+    geom_vline(aes(xintercept=0.352), color="red", linetype="dashed", size=1)+
+    geom_vline(aes(xintercept=0.4031), color="red", linetype="dashed", size=1)+
+    labs(x = "strain", y = "Sigmayy (GPa.)", title = "Stress vs Strain Curve")
+})
+```
+
+#### Elastic modulus
+
+```{r}
+
+sliderInput("strain1", label = "Choose the strain levels:",
+            min = 0.0000, max = 0.45, step = 0.003, value = c(0.0005, 0.077))  
+
+renderText({
+ 
+  df = dataset() %>% select(v_strain, v_sigmayy)
+  x1 = input$strain1[1]
+  x2 = input$strain1[2]
+  
+  y1 = df %>% filter(v_strain == x1) %>% pull(v_sigmayy)
+  y2 = df %>% filter(v_strain == x2) %>% pull(v_sigmayy)
+  
+  slope = (y2 - y1)/(x2 - x1)
+  
+  strains = paste0("(", x2, '-', x1, ")")
+  sigmayy = paste0("(", y2, '-', y1, ")")
+  
+  paste0("Elastic modulus = ", sigmayy, "/", strains, " = ", round(slope, 3), " GPa.")
+  
+}) 
+
+```
+
+#### Plastic modulus
+
+```{r}
+sliderInput("strain2", label = "Choose the strain levels:",
+            min = 0.0000, max = 0.45, step = 0.003, value = c(0.1579, 0.255))  
+
+renderText({
+ 
+  df = dataset() %>% select(v_strain, v_sigmayy)
+  x1 = input$strain2[1]
+  x2 = input$strain2[2]
+  
+  y1 = df %>% filter(v_strain == x1) %>% pull(v_sigmayy)
+  y2 = df %>% filter(v_strain == x2) %>% pull(v_sigmayy)
+  
+  slope = (y2 - y1)/(x2 - x1)
+  
+  strains = paste0("(", x2, '-', x1, ")")
+  sigmayy = paste0("(", y2, '-', y1, ")")
+  
+  paste0("Plastic modulus = ", sigmayy, "/", strains, " = ", round(slope, 3), " Gpa.")
+  
+}) 
+```
+
+#### Pre-fracture slope
+
+```{r}
+sliderInput("strain3", label = "Choose the strain levels:",
+            min = 0.0000, max = 0.45, step = 0.003, value = c(0.352, 0.4031))  
+
+renderText({
+ 
+  df = dataset() %>% select(v_strain, v_sigmayy)
+  x1 = input$strain3[1]
+  x2 = input$strain3[2]
+  
+  y1 = df %>% filter(v_strain == x1) %>% pull(v_sigmayy)
+  y2 = df %>% filter(v_strain == x2) %>% pull(v_sigmayy)
+  
+  slope = (y2 - y1)/(x2 - x1)
+  
+  strains = paste0("(", x2, '-', x1, ")")
+  sigmayy = paste0("(", y2, '-', y1, ")")
+  
+  paste0("Pre-fracture slope = ", sigmayy, "/", strains, " = ", round(slope, 3), " GPa.")
+  
+}) 
+```
+
+#### Stress at fracture
+
+```{r}
+sliderInput("strain4", label = "Choose the strain levels:",
+            min = 0.0000, max = 0.45, step = 0.0003, value = c(0.4032, 0.4036))  
+
+renderText({
+ 
+  df = dataset() %>% select(v_strain, v_sigmayy)
+  x1 = input$strain4[1]
+  x2 = input$strain4[2]
+  
+  y1 = df %>% filter(v_strain == x1) %>% pull(v_sigmayy)
+  y2 = df %>% filter(v_strain == x2) %>% pull(v_sigmayy)
+  y = round((y1+y2)/2, 4)
+  
+  line1 = paste0("Average stress at fracture = ", y, " GPa.")
+  line2 = paste0("Strains at fracture is between ", x1, " and ", x2, "(unitless)")
+  paste(line1, line2)
+  
+}) 
+```
+

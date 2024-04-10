@@ -1,0 +1,294 @@
+---
+title: "Analysis of Tensil Test Data"
+author: "Gaolin"
+date: "10-9-2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(corrplot)
+```
+
+### Experiment setup
+
+Various prototypes of CNTs with varying diameter and chirality were built and relaxed using NPT ensemble at 300K. They then undergo MD based tensile test. 
+
+### Read Tensor test data generated with LAMMPS
+
+```{r, echo = F, warning = F, message= F}
+
+files = list.files("data")
+files = paste("data/", files, sep="")
+
+tensil = read.csv(files[1])
+nn = c(rep(1, 6), rep(4, 8), 82)
+mm = c(104, 122, 139, 191, 69, 87, 111, 129, 146, 163, 181, 198, 77, 94, 82)
+diameter = c(82, 95, 109, 150, 55, 68, 89, 102, 116, 129, 143, 157, 61, 75, 111)
+
+tensil = tensil %>% mutate(n = nn[1], m = mm[1], diameter = diameter[1])
+glimpse(tensil)
+
+for(i in 2:length(files))
+{
+  ttt = read.csv(files[i])
+  ttt = ttt %>% mutate(n = nn[i], m = mm[i], diameter = diameter[i])
+  tensil = rbind(tensil, ttt)
+}
+
+tensil$n = factor(tensil$n)
+tensil$m = factor(tensil$m)
+tensil$diameter = factor(tensil$diameter)
+
+```
+
+### Explore Sigmayy vs Strain
+
+### Investigate the relationship between strain and sigmayy when n = 1 
+
+Sigmayy is plotted against strain for different values of m when n = 1. 
+
+```{r, echo = F, message = F, warning = F}
+ggplot(tensil %>% filter(n==1), aes(x = v_strain, y = v_sigmayy, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Sigmayy") +
+  ylim(c(-10, 250))
+  ggtitle("Sigmayy vs Strain when n = 1") 
+
+ 
+ggplot(tensil %>% filter(n==1), aes(x = v_strain, y = v_sigmayy, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Sigmayy") +
+  ylim(c(-10, 250)) +
+  ggtitle("Sigmayy vs Strain when n = 1") +
+  facet_wrap(~m)
+  
+
+
+```
+
+For n = 1, we notice that sigmayy changes smoothly for higher values of m (m = 122, 139 and 191). For smaller m values (69, 87, 104), we observed some oscillations during plastic stage of the stress test. In general, the pre-fracture point is slightly lower for higher values of m.
+
+### Investigate the relationship between strain and sigmayy when n = 4
+
+Sigmayy is plotted against strain for different m values when n = 4.
+
+```{r, echo = F}
+
+ggplot(tensil %>% filter(n==4), aes(x = v_strain, y = v_sigmayy, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Sigmayy") +
+  ylim(c(-10, 250)) +
+  ggtitle("Sigmayy vs Strain when n = 4") 
+ 
+
+ggplot(tensil %>% filter(n==4), aes(x = v_strain, y = v_sigmayy, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Sigmayy") +
+  ylim(c(-10, 250)) +
+  ggtitle("Sigmayy vs Strain when n = 4") +
+  facet_wrap(~m)
+
+```
+
+For n = 4, we observed that the curve for sigmayy is smoother when m values are high. The slope of elastic stage seemed to be higher than those carbon nanotube with n = 1. The strain is lower to cause pre-fracture for CNT with n = 4 than those CNT with n = 1.
+ 
+ 
+### Investigate potential energy vs strain
+
+```{r, echo = F}
+ggplot(tensil %>% filter(n == 1 | n== 4), aes(x = v_strain, y = PotEng/1000000, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Potential Energy (MeV)") +
+  facet_wrap(~n)
+```
+
+Potential energy went up during elastic and plastic stages and drops drastically during pre-fracture stage. There is an inverse relationship between potential energy and m values.
+
+### Investigate kinetic energy vs strain
+
+```{r, echo = F}
+
+ggplot(tensil %>% filter(n != 82), aes(x = v_strain, y = KinEng, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Kinetic Energy") +
+  ylim(c(0, 45000)) +
+  facet_wrap(~n)
+
+```
+
+
+CNT maintain relatively high kinetic energy for higher m values. 
+
+### Explore correlation among variables
+
+### Overall correlation
+
+#### Get correlation plots for n = 1
+
+```{r, eval = F}
+mmm = sort(mm[1:6])
+
+for(i in 1:length(mmm))
+{
+  ttt = tensil %>% filter(n == 1 & m == mmm[i] & v_strain <= 0.2)
+  ttt = cor(ttt[, 3:14])
+  mytitle = paste("n = 1, m =", mmm[i])
+  corrplot(ttt, method="circle", diag = F, main = mytitle, tl.cex = 0.8, tl.srt = 45, mar=c(0,0,2,0))
+}
+```
+
+#### Get correlation plots for n = 4
+
+```{r, eval = F}
+mmm = sort(mm[7:14])
+
+for(i in 1:length(mmm))
+{
+  ttt = tensil %>% filter(n == 4 & m == mmm[i] & v_strain <= 0.2)
+  ttt = cor(ttt[, 3:14])
+  mytitle = paste("n = 4, m =", mmm[i])
+  corrplot(ttt, method="circle", diag = F, main = mytitle, tl.cex = 0.8, tl.srt = 45, mar=c(0,0,2,0))
+}
+```
+
+### Correlation during elastic stage
+
+#### Correlation plot for n = 1 carbon nanotubes before pre-fracture stage
+
+```{r}
+mmm = sort(mm[1:6])
+
+for(i in 1:length(mmm))
+{
+  ttt = tensil %>% filter(n == 1 & m == mmm[i] & v_strain <= 0.1)
+  ttt = cor(ttt[, 3:14])
+  mytitle = paste("n = 1, m =", mmm[i])
+  corrplot(ttt, method="circle", diag = F, main = mytitle, tl.cex = 0.8, tl.srt = 45, mar=c(0,0,2,0))
+}
+```
+
+#### Correlation plot for n = 4 carbon nanotubes before pre-fracture stage
+
+```{r}
+mmm = sort(mm[7:14])
+
+for(i in 1:length(mmm))
+{
+  ttt = tensil %>% filter(n == 4 & m == mmm[i] & v_strain <= 0.2)
+  ttt = cor(ttt[, 3:14])
+  mytitle = paste("n = 4, m =", mmm[i])
+  corrplot(ttt, method="circle", diag = F, main = mytitle, tl.cex = 0.8, tl.srt = 45, mar=c(0,0,2,0))
+}
+
+```
+
+### Find maximum sigmayy, potential energy and kinetic energy for each (n,m) combination
+
+```{r}
+max_values = tibble(n = numeric(), m = numeric(), sigmayy = numeric(), PE = numeric(), KE = numeric())
+
+for(i in 1:(length(nn)-1))
+{
+  ttt = tensil %>% filter(n == nn[i] & m == mm[i])
+  t_max = c(n = nn[i], m = mm[i], sigmayy = max(ttt[, 5]), PE = max(ttt[, 7]), KE = max(ttt[, 8]))
+  max_values = bind_rows(max_values, t_max)
+}
+
+max_values$n = factor(max_values$n)
+
+
+ggplot(max_values, aes(x=m, y = sigmayy, color = n)) +
+  geom_point() +
+  geom_smooth(se = F)
+
+
+ggplot(max_values, aes(x=m, y = PE/1000000, color = n)) +
+  geom_point() +
+  geom_smooth(se = F) +
+  ylab("Potential Energy (Mev)") 
+
+ggplot(max_values, aes(x = m, y = KE, color = n)) +
+  geom_point() +
+  ylim(c(0, 20000)) +
+  ylab("Kinetic Energy")
+
+```
+ 
+
+### Correlation of sigmayy, PE and KE to strain for different chiralities
+
+```{r}
+cor_values = tibble(n = numeric(), m = numeric(), sigmayy = numeric(), PE = numeric(), KE = numeric(), stage = character())
+
+for(i in 1:(length(nn)-1))
+{
+  ttt = tensil %>% filter(n == nn[i] & m == mm[i] & v_strain < 0.1)
+  cor_values = cor_values %>%
+    add_row(n = nn[i], m = mm[i], sigmayy = cor(ttt[, 3], ttt[, 5]), 
+            PE = cor(ttt[,3], ttt[, 7]), 
+            KE = cor(ttt[,3], ttt[, 8]), stage = "Elastic")
+}
+
+for(i in 1:(length(nn)-1))
+{
+  ttt = tensil %>% filter(n == nn[i] & m == mm[i] & v_strain >= 0.1 & v_strain < 0.2)
+  cor_values = cor_values %>% add_row(n = nn[i], m = mm[i], sigmayy = cor(ttt[, 3], ttt[, 5]), 
+            PE = cor(ttt[,3], ttt[, 7]), 
+            KE = cor(ttt[,3], ttt[, 8]), stage = "Plastic")
+}
+
+cor_values$n = factor(cor_values$n)
+cor_values$stage = factor(cor_values$stage)
+
+
+ggplot(cor_values, aes(x=m, y = sigmayy, color = n, shape = stage)) +
+  geom_point(size = 3) +
+  ylab("Correlation between strain and sigmayy")
+
+
+ggplot(cor_values, aes(x=m, y = PE, color = n, shape = stage)) +
+  geom_point(size = 3) +
+  ylab("Correlation between strain and potential energy")
+
+
+
+
+```
+
+
+### Find strain needed to reach maximum sigmayy
+
+```{r}
+max_sigmayys = tensil %>% filter(n != 82) %>%
+  group_by(n, m) %>% slice(which.max(v_sigmayy))
+
+ggplot(max_sigmayys, aes(x = m, y = v_strain, color = n)) +
+  geom_point() + 
+  ylab("strain")
+
+max_pes = tensil %>% filter(n != 82) %>%
+  group_by(n, m) %>% slice(which.max(PotEng))
+
+ggplot(max_pes, aes(x = m, y = v_strain, color = n)) +
+  geom_point() + 
+  ylab("strain")
+
+max_kes = tensil %>% filter(n != 82) %>%
+  group_by(n, m) %>%
+  slice(which.max(KinEng))
+
+ggplot(max_kes, aes(x = m, y = v_strain, color = n)) +
+  geom_point()
+```
+
+ 

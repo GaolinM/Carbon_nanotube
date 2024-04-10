@@ -1,0 +1,127 @@
+---
+title: "Animal Disease Tracker"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+library(tidyverse)
+library(maps)
+library(ggthemes)
+library(plotly)
+
+cm = readRDS("cm.rds")
+cm = cm %>% filter(domestic_case > 0)
+countries = readRDS("countries.rds")
+diseases = readRDS("diseases.rds")
+worldMap <- ggplot() +
+  borders("world", colour = "gray85", fill = "gray80") +
+  theme_map()
+
+```
+
+Sidebar {.sidebar}
+-----------------------------------------------------------------------
+
+Animal disease data for 176 countries and 18 diseases from 2004 to 2021.
+
+```{r}
+
+selectInput("country", label = "Country:",
+            choices = countries, selected = 'China')
+
+selectInput("disease", label = "Animal Disease:",
+            choices = diseases, selected = 'African swine fever')
+
+sliderInput('year', label="Year", min=2005, max = 2021, sep="", value = 2020)
+sliderInput('week', label = 'Week', min = 1, max = 53, value = c(10,42))
+```
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Domestic cases
+
+
+```{r}
+
+renderPlotly({
+  
+  mydata = cm %>% filter(year == input$year ) %>% 
+    filter(disease == input$disease & week_of_the_year >=input$week[1] & week_of_the_year <= input$week[2]) %>% group_by(country, longitude, latitude) %>% summarise(case = sum(domestic_case), cargo = sum(total_incoming_cargo))
+  
+  map <- worldMap +
+  geom_point(aes(x = longitude, y = latitude,
+                 text = paste0('Country: ', country,
+                              '<br>Domestic cases: ', case, '<br>Cargo: ', cargo),
+                 size = case),
+             data = mydata, colour = 'red', alpha = .5) +
+    labs(size = 'Domestic Cases')
+
+
+  ggplotly(map, tooltip = c('text'))
+  
+  
+}) 
+  
+
+
+```
+
+### Disease Summary
+
+```{r}
+renderPlotly({
+  
+  mydata = cm %>% filter(disease == input$disease)
+  
+  myplot = ggplot(mydata, aes(x = domestic_case)) +
+    geom_histogram(fill = 'coral')
+
+
+  ggplotly(myplot)
+  
+  
+}) 
+  
+```
+
+
+
+
+### Country Disease Summary
+
+```{r}
+renderPlotly({
+  
+  mydata = cm %>% filter(country == input$country ) %>% 
+    filter(disease == input$disease)
+  
+  myplot = ggplot(mydata, aes(x = domestic_case)) +
+    geom_histogram(fill = 'steelblue')
+
+
+  ggplotly(myplot)
+  
+  
+}) 
+  
+```
+
+### Researchers and institutions
+
+```{r}
+renderDataTable({
+  
+  mydata = cm %>% filter(country == input$country ) %>% 
+    filter(disease == input$disease) %>% select(country, disease, researchers, institutions) %>% 
+    distinct()
+  
+  
+}) 
+```
+

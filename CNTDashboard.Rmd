@@ -1,0 +1,198 @@
+---
+title: "North Carolina Central University Carbon Nanotube Database"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+library(tidyverse)
+library(plotly)
+library(DT)
+library(ggcorrplot)
+cntParam = readRDS('cntpara.rds')
+cntParam = cntParam %>% mutate(par = paste0(n, '-', m, '-', diameter))
+tensil = readRDS('tensil.rds')
+```
+
+
+
+Sidebar {.sidebar}
+-----------------------------------------------------------------------
+
+Choose a carbon nanotube configuration.
+
+```{r}
+
+selectInput("par", label = "Choose CNT parameters:",
+            choices = cntParam$par, selected = cntParam$par[1])
+
+
+
+```
+
+Column {.tabset .tabset-fade}
+-----------------------------------------------------------------------
+
+### Sigmayy vs Strain
+
+```{r}
+
+renderPlotly({
+  
+  nn = as.numeric(unlist(strsplit(input$par, '-')))
+  df = tensil %>% filter(n == nn[1] & m == nn[2] & diameter == nn[3]) 
+  
+  p1 <- ggplot(df, aes(v_strain, v_sigmayy)) +
+    geom_point(color = 'steelblue') +
+    labs(title = 'Sigmayy vs Strain')
+
+  ggplotly(p1)
+  
+  
+}) 
+  
+
+
+```
+
+### potential energy vs strain
+
+```{r}
+renderPlotly({
+  
+  nn = as.numeric(unlist(strsplit(input$par, '-')))
+  
+  df = tensil %>% filter(n == nn[1] & m == nn[2] & diameter == nn[3])
+
+  
+  p <- ggplot(df, aes(x = v_strain, y = PotEng)) +
+    geom_point(color = 'seagreen') +
+    labs(title = 'Potential Energy vs Strain')
+  
+ ggplotly(p)
+  
+}) 
+  
+
+  
+```
+
+### kinetic energy vs strain
+
+```{r}
+renderPlotly({
+  
+  nn = as.numeric(unlist(strsplit(input$par, '-')))
+  
+  df = tensil %>% filter(n == nn[1] & m == nn[2] & diameter == nn[3])
+
+  
+  p <- ggplot(df, aes(x = v_strain, y = KinEng)) +
+    geom_point(color = 'red') +
+    labs(title = 'Potential Energy vs Strain')
+  
+ ggplotly(p)
+  
+}) 
+```
+
+
+
+### Correlation matrix
+
+#### Choose strain interval
+```{r}
+
+sliderInput("strain", label = "Choose the strain levels:",
+            min = 0.00006, max = 0.3, step = 0.003, value = c(0.00006, 0.2))  
+  
+
+  
+```
+
+#### Compute correlation matrix
+
+```{r}
+renderPlotly({
+  
+  nn = as.numeric(unlist(strsplit(input$par, '-')))
+  
+  df = tensil %>% filter(n == nn[1] & m == nn[2] & diameter == nn[3] & v_strain >= input$strain[1] & v_strain <= input$strain[2])
+
+  
+  corr = cor(df[, 3:14])
+  
+  p = ggcorrplot(corr,method = "square")
+  
+  
+  ggplotly(p)
+}) 
+```
+
+
+### Slope Calculation
+
+#### Choose strain interval
+```{r}
+
+sliderInput("strain2", label = "Choose the strain levels:",
+            min = 0.00006, max = 0.3, step = 0.003, value = c(0.00006, 0.2))  
+  
+```
+
+#### Compute Slopes
+Please choose the interval for strain to compute the slope.
+```{r}
+renderText({
+ 
+  nn = as.numeric(unlist(strsplit(input$par, '-')))
+  x1 = input$strain2[1]
+  x2 = input$strain2[2]
+  
+  df = tensil %>% filter(n == nn[1] & m == nn[2] & diameter == nn[3])
+  
+  y1 = df %>% filter(v_strain == x1) %>% pull(v_sigmayy)
+  y2 = df %>% filter(v_strain == x2) %>% pull(v_sigmayy)
+  
+  slope = (y2 - y1)/(x2 - x1)
+  
+  strains = paste0(x1, '-', x2)
+  sigmayy = paste0(y1, '-', y2)
+  
+  slope
+  
+}) 
+
+```
+
+### Comparative plots
+
+#### Comparative plots of (Sigmayy vs Strain) for different chiralities
+
+```{r}
+ggplot(tensil %>% filter(n == 1 | n== 4), aes(x = v_strain, y = v_sigmayy, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Sigmayy") +
+  facet_wrap(~n) + 
+  labs(title = "Sigmayy vs strain for different chiralities")
+```
+
+
+#### Comparative plots of (Kinetic energy vs Strain) for different chiralities
+
+
+```{r}
+ggplot(tensil %>% filter(n != 82), aes(x = v_strain, y = KinEng, color = m)) + 
+  geom_line() +
+  xlab("Strain") +
+  ylab("Kinetic Energy") +
+  ylim(c(0, 45000)) +
+  facet_wrap(~n) +
+  labs(title = 'Kinetic energy vs strain for different chiralities')
+  
+```
